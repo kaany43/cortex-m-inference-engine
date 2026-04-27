@@ -41,19 +41,25 @@ int main() {
     print_char('\n');
 
 
-    int dot_product(int* a, int* b, int len) {
-        int result = 0;
+    int32_t dot_product_int8(int8_t* a, int8_t* b, int len) {
+        int32_t result = 0;
         for (int i = 0; i < len; i++) {
-            result += a[i] * b[i];
+            result += (int32_t)a[i] * (int32_t)b[i];
         }
         return result;
     }
-    int a[] = {1, 2, 3};
-    int b[] = {4, 5, 6};
-    int result = dot_product(a, b, 3);
+    int8_t a[] = {1, 2, 3};
+    int8_t b[] = {4, 5, 6};
+    int32_t result = dot_product_int8(a, b, 3);
     print_char('D');
     print_char(':');
     print_int(result);
+    print_char('\n');
+    int32_t scale_fixed = 13;
+    int32_t result_quantized = ((int64_t)result * scale_fixed) >> 8;
+    print_char('Q');
+    print_char(':');
+    print_int(result_quantized);
     print_char('\n');
     while(1) {
 
