@@ -11,7 +11,7 @@ No OS, no libraries, no runtime — just hardware and math.
 - [x] UART output without printf
 - [x] Static SRAM memory analyzer
 - [x] Dot product (core neural network operation)
-- [x] INT8 quantized layer execution
+- [x] INT8 quantized layer execution (refactored to reusable `run_layer` function)
 - [ ] Layer-by-layer memory scheduler
 - [ ] Benchmark vs TFLite Micro
 
