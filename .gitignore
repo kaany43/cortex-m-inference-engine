@@ -1,0 +1,13 @@
+# Compilation artifacts
+*.elf
+*.o
+*.bin
+
+# Model weights and test data
+layer*_weights.h
+layer*_weights.npy
+test_image.h
+
+# Python caches
+__pycache__/
+*.pyc

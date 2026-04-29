@@ -1,4 +1,8 @@
 #include <stdint.h>
+#include "layer1_weights.h"
+#include "layer2_weights.h"
+#include "test_image.h"
+
 #define UART0_DR (*((volatile unsigned int*)0x4000C000))
 void print_char(char c);
 
@@ -27,12 +31,12 @@ void print_char(char c) {
 }
 
 // Helper function prototypes
-int32_t dot_product_int8(int8_t* a, int8_t* b, int len);
+int32_t dot_product_int8(const int8_t* a, const int8_t* b, int len);
 static inline int32_t quantized(int32_t value, int32_t scale_fixed);
 static inline int32_t relu(int32_t x);
 
 // Helper function implementations
-int32_t dot_product_int8(int8_t* a, int8_t* b, int len) {
+int32_t dot_product_int8(const int8_t* a, const int8_t* b, int len) {
     int32_t result = 0;
     for (int i = 0; i < len; i++) {
         result += (int32_t)a[i] * (int32_t)b[i];
@@ -41,15 +45,15 @@ int32_t dot_product_int8(int8_t* a, int8_t* b, int len) {
 }
 
 static inline int32_t quantized(int32_t value, int32_t scale_fixed) {
-    return ((int64_t)value * scale_fixed) >> 8;
+    return (int32_t)(((int64_t)value * scale_fixed) >> 16);
 }
 
 static inline int32_t relu(int32_t x) {
     return (x > 0) ? x : 0;
 }
 
-void run_layer(int8_t* input, int8_t* weights, int8_t* output, int rows, int cols) {
-    int32_t raw_dp[16];
+void run_layer(const int8_t* input, const int8_t* weights, int8_t* output, int rows, int cols) {
+    int32_t raw_dp[64];
     int32_t max_val = 0;
 
     // 1. Pass: Compute raw dot products and find the maximum positive value
@@ -65,9 +69,14 @@ void run_layer(int8_t* input, int8_t* weights, int8_t* output, int rows, int col
         max_val = 1;
     }
 
+    print_char('M');
+    print_char(':');
+    print_int(max_val);
+    print_char('\n');
+
     // Calculate fixed-point scale factor (maps max_val to 127 using 8-bit shift)
     // This entirely avoids floating-point operations!
-    int32_t scale_fixed = (127 << 8) / max_val;
+    int32_t scale_fixed = (127 << 16) / max_val;
 
     // 2. Pass: Quantize and apply ReLU
     for (int r = 0; r < rows; r++) {
@@ -92,9 +101,6 @@ int main() {
             peak_sram = used;
         }
     }
-    print_char('O');
-    print_char('K');
-    print_char('\n');
 
 
     print_char('P');
@@ -105,19 +111,11 @@ int main() {
 
 
 
-    int8_t input[] = {1, 2, 3};
-    // Example weight matrices
-    int8_t weights1[2][3] = {{1, 0, -1}, {2, 1, 0}};
-    int8_t weights2[2][2] = {{1, -1}, {0, 1}};
-    
-    int8_t hidden_out[2];
-    int8_t output[2];
+    int8_t hidden_out[32];
+    int8_t output[10];
 
-    print_char('L'); print_char('1'); print_char('\n');
-    run_layer(input, (int8_t*)weights1, hidden_out, 2, 3);
-
-    print_char('L'); print_char('2'); print_char('\n');
-    run_layer(hidden_out, (int8_t*)weights2, output, 2, 2);
+    run_layer(test_image, layer1_weights, hidden_out, 32, 784);
+    run_layer(hidden_out, layer2_weights, output, 10, 32);
 
     return 0;
 }
