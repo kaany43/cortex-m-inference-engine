@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import os
 
 # Küçük MNIST modeli indir ve INT8 export et
 model = tf.keras.models.Sequential([
@@ -17,6 +18,7 @@ model.fit(x_train, y_train, epochs=3, verbose=1)
 
 # Ağırlıkları INT8 olarak kaydet + bias export
 bias_list = []
+os.makedirs('headers', exist_ok=True)
 for i, layer in enumerate(model.layers):
     weights = layer.get_weights()
     if weights:
@@ -26,11 +28,21 @@ for i, layer in enumerate(model.layers):
         # Transpose: TF gives (input, output), C needs (output, input)
         w_T = w.T
         w_int8 = np.clip(np.round(w_T / scale * 127), -128, 127).astype(np.int8)
-        np.save(f'layer{i}_weights.npy', w_int8)
+        
+        with open(f'headers/layer{i}_weights.h', 'w') as f:
+            f.write('#pragma once\n')
+            f.write('#include <stdint.h>\n\n')
+            f.write(f'#define LAYER{i}_ROWS {w.shape[1]}\n')
+            f.write(f'#define LAYER{i}_COLS {w.shape[0]}\n\n')
+            f.write(f'static const int8_t layer{i}_weights[] = {{\n  ')
+            f.write(', '.join(str(x) for x in w_int8.flatten()))
+            f.write('\n};\n')
+            
         # Bias: scale to match quantized output domain (bias_float * 127)
         bias_int32 = np.round(b * 127).astype(np.int32)
         bias_list.append((i, bias_int32))
         print(f'Layer {i}: shape={w_int8.shape}, scale={scale:.4f}, bias_range=[{b.min():.4f}, {b.max():.4f}]')
+        print(f'headers/layer{i}_weights.h yazıldı')
 
 
 (_, _), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
@@ -40,7 +52,7 @@ x_test = x_test / 255.0
 img = x_test[0].flatten()
 img_int8 = np.clip(np.round(img * 127), -128, 127).astype(np.int8)
 
-with open('test_image.h', 'w') as f:
+with open('headers/test_image.h', 'w') as f:
     f.write('#pragma once\n#include <stdint.h>\n\n')
     f.write(f'// Label: {y_test[0]}\n')
     f.write(f'#define TEST_LABEL {y_test[0]}\n\n')
@@ -57,7 +69,7 @@ imgs = x_test[:100].reshape(100, -1)
 imgs_int8 = np.clip(np.round(imgs * 127), -128, 127).astype(np.int8)
 labels = y_test[:100]
 
-with open('test_batch.h', 'w') as f:
+with open('headers/test_batch.h', 'w') as f:
     f.write('#pragma once\n#include <stdint.h>\n\n')
     f.write('#define TEST_COUNT 100\n\n')
     f.write('static const int8_t test_batch[] = {\n  ')
@@ -70,7 +82,7 @@ with open('test_batch.h', 'w') as f:
 print('test_batch.h yazıldı')
 
 # Bias header dosyasını oluştur
-with open('bias.h', 'w') as f:
+with open('headers/bias.h', 'w') as f:
     f.write('#pragma once\n#include <stdint.h>\n\n')
     for idx, (layer_idx, bias) in enumerate(bias_list):
         f.write(f'static const int32_t layer{idx+1}_bias[] = {{\n  ')
@@ -87,10 +99,25 @@ for i, layer in enumerate(model.layers):
         scale = np.max(np.abs(w))
         scales.append(scale)
 
-with open('scales.h', 'w') as f:
+with open('headers/scales.h', 'w') as f:
     f.write('#pragma once\n#include <stdint.h>\n\n')
     for i, scale in enumerate(scales):
         scale_fixed = int((scale / 127) * 65536)  # 16-bit shift
         f.write(f'#define LAYER{i+1}_SCALE_FIXED {scale_fixed}\n')
 
 print('scales.h yazıldı:', scales)
+
+# Tüm headerları içeren tek bir model.h oluştur
+with open('headers/model.h', 'w') as f:
+    f.write('#pragma once\n\n')
+    f.write('// Model weights and biases\n')
+    for i, layer in enumerate(model.layers):
+        if layer.get_weights():
+            f.write(f'#include "layer{i}_weights.h"\n')
+    f.write('#include "bias.h"\n')
+    f.write('#include "scales.h"\n\n')
+    f.write('// Test data\n')
+    f.write('#include "test_image.h"\n')
+    f.write('#include "test_batch.h"\n')
+
+print('model.h yazıldı')
