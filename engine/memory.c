@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory.h"
+#include "uart.h"
 
 void compute_peak_sram(int* layers, int num_layers) {
     volatile int peak_sram = 0;
